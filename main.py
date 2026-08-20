@@ -11,8 +11,9 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# 🛑 सिर्फ Netlify और Localhost को परमिशन
+# 🛑 Cloudflare Pages, Netlify और Localhost सभी को परमिशन
 origins = [
+    "https://freevidloader.pages.dev",
     "https://freevidloader.netlify.app",
     "http://localhost:3000"
 ]
@@ -21,12 +22,16 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["POST", "OPTIONS", "GET"],
     allow_headers=["*"],
 )
 
 class VideoRequest(BaseModel):
     url: str
+
+@app.get("/")
+def root():
+    return {"status": "ok", "message": "FreeVidLoader API is active!"}
 
 @app.post("/api/download")
 @limiter.limit("3/minute")
