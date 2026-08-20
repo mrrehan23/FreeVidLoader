@@ -11,7 +11,6 @@ app = FastAPI()
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# 🛑 Cloudflare Pages, Netlify और Localhost सभी को परमिशन
 origins = [
     "https://freevidloader.pages.dev",
     "https://freevidloader.netlify.app",
@@ -31,16 +30,26 @@ class VideoRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "FreeVidLoader API is active!"}
+    return {"status": "ok", "message": "Server is Running"}
 
 @app.post("/api/download")
-@limiter.limit("3/minute")
+@limiter.limit("5/minute")
 async def extract_video(request: Request, data: VideoRequest):
     url = data.url
     if "youtube.com" in url or "youtu.be" in url:
         raise HTTPException(status_code=400, detail="YouTube is disabled.")
 
-    ydl_opts = {'format': 'best', 'quiet': True, 'no_warnings': True}
+    # 🛠️ Instagram और Facebook सुरक्षा बायपास सेटिंग्स
+    ydl_opts = {
+        'format': 'best',
+        'quiet': True,
+        'no_warnings': True,
+        'socket_timeout': 30,
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+        }
+    }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -52,4 +61,5 @@ async def extract_video(request: Request, data: VideoRequest):
                 "download_url": info.get('url'),
             }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail="Video processing failed or link private.")
+
