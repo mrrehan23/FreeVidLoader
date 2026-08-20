@@ -1,5 +1,5 @@
 fastapi
 uvicorn
-yt-dlp
+yt-dlp>=2024.0.0
 pydantic
 slowapi
