@@ -1,15 +1,27 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import yt_dlp
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Frontend से रिक्वेस्ट अलाउ करने के लिए CORS
+# 🛑 सिर्फ Netlify और Localhost को परमिशन
+origins = [
+    "https://freevidloader.netlify.app",
+    "http://localhost:3000"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -17,18 +29,13 @@ class VideoRequest(BaseModel):
     url: str
 
 @app.post("/api/download")
-async def extract_video(data: VideoRequest):
+@limiter.limit("3/minute")
+async def extract_video(request: Request, data: VideoRequest):
     url = data.url
-    
-    # लीगल सेफ्टी: YouTube को ब्लॉक करें (Optional, लेकिन सुरक्षित)
     if "youtube.com" in url or "youtu.be" in url:
-        raise HTTPException(status_code=400, detail="YouTube downloading is disabled to respect copyright policies.")
+        raise HTTPException(status_code=400, detail="YouTube is disabled.")
 
-    ydl_opts = {
-        'format': 'best',
-        'quiet': True,
-        'no_warnings': True,
-    }
+    ydl_opts = {'format': 'best', 'quiet': True, 'no_warnings': True}
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -40,5 +47,4 @@ async def extract_video(data: VideoRequest):
                 "download_url": info.get('url'),
             }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error extracting video: {str(e)}")
-      
+        raise HTTPException(status_code=400, detail=str(e))
